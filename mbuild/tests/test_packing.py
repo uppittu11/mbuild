@@ -38,11 +38,15 @@ class TestPacking(BaseTest):
 
     def test_fill_region(self, h2o):
         filled = mb.fill_region(h2o, n_compounds=50,
-                                region=[3, 2, 2, 4, 4, 3])
+                                region=[3, 2, 2, 5, 5, 5])
         assert filled.n_particles == 50 * 3
         assert filled.n_bonds == 50 * 2
         assert np.min(filled.xyz[:,0]) >= 3
-        assert np.max(filled.xyz[:,2]) <= 3
+        assert np.min(filled.xyz[:,1]) >= 2
+        assert np.min(filled.xyz[:,2]) >= 2
+        assert np.max(filled.xyz[:,0]) <= 5
+        assert np.max(filled.xyz[:,1]) <= 5
+        assert np.max(filled.xyz[:,2]) <= 5
 
     def test_fill_region_box(self, h2o):
         mybox = mb.Box([4, 4, 4])
@@ -132,6 +136,9 @@ class TestPacking(BaseTest):
             mb.solvate(solute=h2o, solvent=[h2o], n_solvent=[10, 10], box=[2, 2, 2])
         with pytest.raises(ValueError):
             mb.fill_region(h2o, n_compounds=[10, 10], region=[2, 2, 2, 4, 4, 4])
+        with pytest.raises(ValueError):
+            mb.fill_box(compound=[h2o, h2o], n_compounds=[10], density=1000,
+                        fix_orientation=[True, True, True])
 
     def test_write_temp_file(self, h2o):
         cwd = os.getcwd() # Must keep track of the temp dir that pytest creates
@@ -148,4 +155,22 @@ class TestPacking(BaseTest):
 
     def test_packmol_warning(self, h2o):
         with pytest.warns(UserWarning):
-            filled = mb.fill_box(h2o, n_compounds=10, box=[1, 1, 1], overlap=100)
+            filled = mb.fill_box(h2o, n_compounds=10, box=[1, 1, 1], overlap=10)
+
+    def test_rotate(self, h2o):
+        filled = mb.fill_box(h2o, 2, box=[1, 1, 1], fix_orientation=True)
+        w0 = filled.xyz[:3]
+        w1 = filled.xyz[3:]
+        # Translate w0 and w1 to COM
+        w0 -= w0.sum(0) / len(w0)
+        w1 -= w1.sum(0) / len(w1)
+        assert np.isclose(w0, w1).all()
+
+    def test_no_rotate(self, h2o):
+        filled = mb.fill_box([h2o, h2o], [1, 1], box=[1, 1, 1], fix_orientation=[False, True])
+        w0 = filled.xyz[:3]
+        w1 = filled.xyz[3:]
+        # Translate w0 and w1 to COM
+        w0 -= w0.sum(0) / len(w0)
+        w1 -= w1.sum(0) / len(w1)
+        assert np.isclose(w0, w1).all() is not True
