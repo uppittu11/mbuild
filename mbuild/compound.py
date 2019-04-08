@@ -1306,7 +1306,7 @@ class Compound(object):
         scale_torsions : float, optional, default=1
             Scales the torsional force constants (1 is completely on)
             For _energy_minimize_openmm
-            Note: Only Ryckaert-Bellemans style torsions are currently supported 
+            Note: Only Ryckaert-Bellemans style torsions are currently supported
         scale_nonbonded : float, optional, default=1
             Scales epsilon (1 is completely on)
             For _energy_minimize_openmm
@@ -1409,7 +1409,7 @@ class Compound(object):
         Parameters
         ----------
         forcefield_files : str or list of str, optional, default=None
-            Forcefield files to load 
+            Forcefield files to load
         forcefield_name : str, optional, default=None
             Apply a named forcefield to the output file using the `foyer`
             package, e.g. 'oplsaa'. Forcefields listed here:
@@ -1731,7 +1731,7 @@ class Compound(object):
             foyer = import_('foyer')
             ff = foyer.Forcefield(forcefield_files=forcefield_files,
                                   name=forcefield_name, debug=forcefield_debug)
-            structure = ff.apply(structure, references_file=references_file)
+            structure = ff.apply(structure, references_file=references_file, assert_dihedral_params=False)
             structure.combining_rule = combining_rule
 
         total_charge = sum([atom.charge for atom in structure])
