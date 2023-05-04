@@ -12,6 +12,7 @@ from subprocess import PIPE, Popen
 
 import numpy as np
 
+from mbuild.conversion import load
 from mbuild import clone
 from mbuild.box import Box
 from mbuild.compound import Compound
@@ -70,6 +71,7 @@ def fill_box(
     fix_orientation=False,
     temp_file=None,
     update_port_locations=False,
+    xyz_only=False,
 ):
     """Fill a box with an `mbuild.compound` or `Compound` s using PACKMOL.
 
@@ -260,13 +262,17 @@ def fill_box(
                 PACKMOL_CONSTRAIN if rotate else "",
             )
         _run_packmol(input_text, filled_xyz, temp_file)
-        # Create the topology and update the coordinates.
-        filled = Compound()
-        filled = _create_topology(filled, compound, n_compounds)
-        filled.update_coordinates(
-            filled_xyz.name, update_port_locations=update_port_locations
-        )
-        filled.box = box
+        
+        if xyz_only:
+            filled = load(filled_xyz.name)
+        else:
+            # Create the topology and update the coordinates.
+            filled = Compound()
+            filled = _create_topology(filled, compound, n_compounds)
+            filled.update_coordinates(
+                filled_xyz.name, update_port_locations=update_port_locations
+            )
+            filled.box = box
 
     # ensure that the temporary files are removed from the machine after filling
     finally:
@@ -275,7 +281,10 @@ def fill_box(
             os.unlink(file_handle.name)
         filled_xyz.close()
         os.unlink(filled_xyz.name)
-    return filled
+    if xyz_only:
+        return filled.xyz
+    else:
+        return filled
 
 
 def fill_region(
