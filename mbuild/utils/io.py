@@ -26,7 +26,7 @@ import textwrap
 import warnings
 from unittest import SkipTest
 
-from pkg_resources import resource_filename
+import importlib_resources as resources
 
 
 class DelayImportError(ImportError, SkipTest):
@@ -396,10 +396,11 @@ def get_fn(name):
     name : str
         Name of the file to load (with respect to the reference/ folder).
     """
-    fn = resource_filename("mbuild", os.path.join("utils", "reference", name))
+    fn = resources.files("mbuild").joinpath("utils", "reference", name)
+    # fn = resource_filename("mbuild", os.path.join("utils", "reference", name))
     if not os.path.exists(fn):
         raise IOError("Sorry! {} does not exists.".format(fn))
-    return fn
+    return str(fn)
 
 
 def run_from_ipython():

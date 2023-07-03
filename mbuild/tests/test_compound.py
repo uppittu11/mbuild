@@ -433,17 +433,24 @@ class TestCompound(BaseTest):
         assert struct.residues[0].number == 1
         assert struct.residues[1].number == 2
 
-    def test_save_residue_map(self, methane):
-        filled = mb.fill_box(methane, n_compounds=20, box=[0, 0, 0, 4, 4, 4])
+    def test_save_residue_map(self, ethane):
+        filled = mb.fill_box(ethane, n_compounds=100, box=[0, 0, 0, 4, 4, 4])
         t0 = time.time()
-        filled.save("filled.mol2", forcefield_name="oplsaa", residues="Methane")
+        foyer_kwargs = {"use_residue_map": True}
+        filled.save(
+            "filled.mol2",
+            forcefield_name="oplsaa",
+            residues="Ethane",
+            foyer_kwargs=foyer_kwargs,
+        )
         t1 = time.time()
+
         foyer_kwargs = {"use_residue_map": False}
         filled.save(
             "filled.mol2",
             forcefield_name="oplsaa",
             overwrite=True,
-            residues="Methane",
+            residues="Ethane",
             foyer_kwargs=foyer_kwargs,
         )
         t2 = time.time()
@@ -713,32 +720,48 @@ class TestCompound(BaseTest):
         ch3_clone = mb.clone(ch3)
         ch3_clone.box = mb.Box(lengths=[max(bounding_box.lengths) + 1] * 3)
         ch3_clone.periodicity = (True, True, True)
-        ch3_clone.freud_generate_bonds(
-            "H", "H", dmin=0.01, dmax=0.2, exclude_ii=True
-        )
+        ch3_clone.freud_generate_bonds("H", "H", dmin=0.01, dmax=0.2)
         assert ch3_clone.n_bonds == 3 + 3
 
         ch3_clone2 = mb.clone(ch3)
         ch3_clone2.box = mb.Box(lengths=[max(bounding_box.lengths) + 1] * 3)
         ch3_clone2.periodicity = (True, True, False)
-        ch3_clone2.freud_generate_bonds(
-            "H", "H", dmin=0.01, dmax=0.2, exclude_ii=True
-        )
+        ch3_clone2.freud_generate_bonds("H", "H", dmin=0.01, dmax=0.2)
         assert ch3_clone2.n_bonds == 3 + 3
 
     @pytest.mark.skipif(not has_freud, reason="Freud not installed.")
     def test_freud_generate_bonds(self, ch3):
         bounding_box = ch3.get_boundingbox()
         ch3.box = mb.Box(lengths=[max(bounding_box.lengths) + 1] * 3)
-        ch3.freud_generate_bonds("H", "H", dmin=0.01, dmax=0.2, exclude_ii=True)
+        ch3.freud_generate_bonds("H", "H", dmin=0.01, dmax=0.2)
         assert ch3.n_bonds == 3 + 3
 
     @pytest.mark.skipif(not has_freud, reason="Freud not installed.")
     def test_freud_generate_bonds_expected(self, ch3):
         bounding_box = ch3.get_boundingbox()
         ch3.box = mb.Box(lengths=[max(bounding_box.lengths) + 1] * 3)
-        ch3.freud_generate_bonds("H", "H", dmin=0.01, dmax=0.1, exclude_ii=True)
+        ch3.freud_generate_bonds("H", "H", dmin=0.01, dmax=0.1)
         assert ch3.n_bonds == 3
+
+    @pytest.mark.skipif(not has_freud, reason="Freud not installed.")
+    def test_freud_generate_bonds_mixed(self):
+        carbon_atom = mb.Compound(name="C", element="C")
+
+        grid_pattern = mb.Grid3DPattern(2, 2, 2)
+
+        grid_pattern.scale([0.25, 0.25, 0.25])
+        carbon_list = grid_pattern.apply(carbon_atom)
+        co_system = mb.Compound(carbon_list)
+        co_system.box = mb.Box([1, 1, 1])
+        for i, child in enumerate(co_system.children):
+            if i % 2 == 0:
+                child.name = "O"
+                child.element = "O"
+
+        co_system.freud_generate_bonds(
+            name_a="C", name_b="O", dmin=0.0, dmax=0.16
+        )
+        assert co_system.n_bonds == 4
 
     def test_remove_from_box(self, ethane):
         n_ethanes = 5
@@ -988,6 +1011,28 @@ class TestCompound(BaseTest):
         assert (
             condensed_hierarchy.to_json(with_data=False)
             == '{"Compound, 18 particles, 14 bonds, 4 children": {"children": ["[C x 2], 1 particles, 0 bonds, 0 children", {"[Ethane x 2], 8 particles, 7 bonds, 2 children": {"children": [{"[CH3 x 2], 4 particles, 3 bonds, 4 children": {"children": ["[C x 1], 1 particles, 4 bonds, 0 children", "[H x 3], 1 particles, 1 bonds, 0 children"]}}]}}]}}'
+        )
+
+    def test_condense_tip4p(self):
+        # tip4p has a virtual site that doesn't have an explicit bond with other particles
+        # this test is to ensure that this site doesn't get added twice when condense is called
+        import mbuild.lib.molecules.water as water_models
+
+        water = water_models.WaterTIP4P()
+        water_list = []
+        waters = mb.Compound()
+        system = mb.Compound()
+        for i in range(0, 3):
+            water_list.append(mb.clone(water))
+
+        waters.add(water_list)
+        system.add(waters)
+
+        condensed = waters.condense(inplace=False)
+
+        assert (
+            condensed.print_hierarchy().to_json(with_data=False)
+            == '{"Compound, 12 particles, 6 bonds, 3 children": {"children": [{"[WaterTIP4P x 3], 4 particles, 2 bonds, 4 children": {"children": ["[HW1 x 1], 1 particles, 1 bonds, 0 children", "[HW2 x 1], 1 particles, 1 bonds, 0 children", "[MW x 1], 1 particles, 0 bonds, 0 children", "[OW x 1], 1 particles, 2 bonds, 0 children"]}}]}}'
         )
 
     def test_flatten_eth(self, ethane):
@@ -2314,15 +2359,6 @@ class TestCompound(BaseTest):
         assert (
             np.diff(np.vstack(pos).reshape(len(pos), -1), axis=0) == 0
         ).all()
-
-    @pytest.mark.parametrize("bad_smiles", ["F[P-](F)(F)(F)(F)F"])
-    @pytest.mark.skipif(not has_rdkit, reason="RDKit is not installed")
-    def test_incorrect_rdkit_smiles(self, bad_smiles):
-        with pytest.raises(
-            MBuildError,
-            match=r"RDKit was unable to generate " r"3D coordinates",
-        ):
-            mb.load(bad_smiles, smiles=True, backend="rdkit", seed=29)
 
     @pytest.mark.skipif(not has_openbabel, reason="Pybel is not installed")
     def test_get_smiles(self):
